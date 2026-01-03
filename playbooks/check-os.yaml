@@ -1,0 +1,11 @@
+---
+- name: Detect OS type
+  hosts: all
+  gather_facts: yes
+  tasks:
+    - name: Show OS info
+      debug:
+        msg: >
+          Host {{ inventory_hostname }} is
+          {{ ansible_distribution }} {{ ansible_distribution_version }}
+

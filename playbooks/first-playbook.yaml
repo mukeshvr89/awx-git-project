@@ -1,0 +1,7 @@
+---
+- name: This is a simple ping playbook
+  hosts: all
+  gather_facts: no
+  tasks:
+    - name: Check the node status
+      ping:

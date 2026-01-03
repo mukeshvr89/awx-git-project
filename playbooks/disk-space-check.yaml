@@ -1,0 +1,12 @@
+---
+- name: Check disk usage
+  hosts: all
+  gather_facts: no
+  tasks:
+    - name: Check root disk
+      command: df -h /
+      register: disk
+
+    - name: Show disk usage
+      debug:
+        var: disk.stdout_lines
