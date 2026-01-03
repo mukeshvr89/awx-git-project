@@ -1,0 +1,7 @@
+---
+all:
+  hosts:
+    ubuntu-host:
+      ansible_host: ubuntu-client.ansible-clients
+    centos-host: 
+      ansible_host: centos-client.ansible-clients

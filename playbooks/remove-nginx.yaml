@@ -1,0 +1,13 @@
+---
+- hosts: all
+  user: root
+  tasks: 
+  - name: Install NGINX package
+    package: 
+      name: nginx
+      state: absent
+    notify: Package Installed
+  handlers:
+    - name: Package Installed
+      debug: 
+        msg: NGINX installed successfully
