@@ -2,12 +2,12 @@
 - hosts: all
   user: root
   tasks: 
-  - name: Install NGINX package
+  - name: Remove NGINX package
     package: 
       name: nginx
       state: absent
-    notify: Package Installed
+    notify: NGINX removed 
   handlers:
-    - name: Package Installed
+    - name: NGINX removed
       debug: 
-        msg: NGINX installed successfully
+        msg: NGINX removed successfully
