@@ -1,0 +1,49 @@
+---
+- name: Provision AKS with Custom VNet and DNS
+  hosts: localhost
+  connection: local
+
+  tasks:
+    - name: Login to Azure
+      shell: |
+        az login --service-principal \
+          -u {{ client_id }} \
+          -p {{ client_secret }} \
+          --tenant {{ tenant_id }}
+      environment:
+        AZURE_DEFAULTS_LOCATION: "{{ location }}"
+
+    - name: Create Resource Group
+      shell: az group create -n {{ resource_group }} -l {{ location }}
+
+    - name: Create VNet and Subnets
+      shell: |
+        az network vnet create \
+          -g {{ resource_group }} -n {{ vnet_name }} \
+          --address-prefix 10.10.0.0/16
+        az network vnet subnet create \
+          -g {{ resource_group }} \
+          --vnet-name {{ vnet_name }} \
+          -n {{ api_subnet }} \
+          --address-prefix 10.10.0.0/28 \
+          --delegations Microsoft.ContainerService/managedClusters
+        az network vnet subnet create \
+          -g {{ resource_group }} \
+          --vnet-name {{ vnet_name }} \
+          -n {{ node_subnet }} \
+          --address-prefix 10.10.1.0/24 \
+          --delegations Microsoft.ContainerService/managedClusters
+
+    - name: Create AKS Cluster with Custom DNS
+      shell: |
+        az aks create \
+          -g {{ resource_group }} \
+          -n {{ aks_name }} \
+          --enable-private-cluster \
+          --vnet-subnet-id $(az network vnet subnet show \
+            -g {{ resource_group }} --vnet-name {{ vnet_name }} -n {{ node_subnet }} --query id -o tsv) \
+          --apiserver-subnet-id $(az network vnet subnet show \
+            -g {{ resource_group }} --vnet-name {{ vnet_name }} -n {{ api_subnet }} --query id -o tsv) \
+          --private-dns-zone $(az network private-dns zone create \
+            -g {{ resource_group }} -n {{ dns_zone }} --query id -o tsv) \
+          --network-plugin azure
