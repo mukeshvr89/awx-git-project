@@ -1,49 +1,93 @@
 ---
-- name: Provision AKS with Custom VNet and DNS
+- name: Provision AKS Cluster with Custom Network and DNS
   hosts: localhost
   connection: local
+  gather_facts: no
 
   tasks:
-    - name: Login to Azure
-      shell: |
+
+    - name: "🔹 Test Azure Login (using AWX Credential)"
+      ansible.builtin.shell: |
         az login --service-principal \
-          -u {{ client_id }} \
-          -p {{ client_secret }} \
-          --tenant {{ tenant_id }}
-      environment:
-        AZURE_DEFAULTS_LOCATION: "{{ location }}"
+          -u $AZURE_CLIENT_ID \
+          -p $AZURE_CLIENT_SECRET \
+          --tenant $AZURE_TENANT_ID \
+          --query "[].name" -o tsv
+      register: login_result
 
-    - name: Create Resource Group
-      shell: az group create -n {{ resource_group }} -l {{ location }}
+    - name: Show Azure login result
+      ansible.builtin.debug:
+        var: login_result.stdout_lines
 
-    - name: Create VNet and Subnets
-      shell: |
-        az network vnet create \
-          -g {{ resource_group }} -n {{ vnet_name }} \
-          --address-prefix 10.10.0.0/16
+    - name: "🔹 Create Resource Group"
+      ansible.builtin.shell: |
+        az group create -n {{ resource_group }} -l {{ location }}
+      register: rg_result
+
+    - name: Show Resource Group output
+      ansible.builtin.debug:
+        var: rg_result.stdout
+
+    - name: "🔹 Create Virtual Network"
+      ansible.builtin.shell: |
+        az network vnet create -g {{ resource_group }} -n {{ vnet_name }} --address-prefix 10.10.0.0/16
+      register: vnet_result
+
+    - name: Show VNet output
+      ansible.builtin.debug:
+        var: vnet_result.stdout
+
+    - name: "🔹 Create API Subnet"
+      ansible.builtin.shell: |
         az network vnet subnet create \
           -g {{ resource_group }} \
           --vnet-name {{ vnet_name }} \
           -n {{ api_subnet }} \
           --address-prefix 10.10.0.0/28 \
           --delegations Microsoft.ContainerService/managedClusters
+      register: api_subnet_result
+
+    - name: Show API Subnet output
+      ansible.builtin.debug:
+        var: api_subnet_result.stdout
+
+    - name: "🔹 Create Node Subnet"
+      ansible.builtin.shell: |
         az network vnet subnet create \
           -g {{ resource_group }} \
           --vnet-name {{ vnet_name }} \
           -n {{ node_subnet }} \
           --address-prefix 10.10.1.0/24 \
           --delegations Microsoft.ContainerService/managedClusters
+      register: node_subnet_result
 
-    - name: Create AKS Cluster with Custom DNS
-      shell: |
+    - name: Show Node Subnet output
+      ansible.builtin.debug:
+        var: node_subnet_result.stdout
+
+    - name: "🔹 Create Private DNS Zone"
+      ansible.builtin.shell: |
+        az network private-dns zone create -g {{ resource_group }} -n {{ dns_zone }}
+      register: dns_result
+
+    - name: Show DNS Zone output
+      ansible.builtin.debug:
+        var: dns_result.stdout
+
+    - name: "🔹 Create AKS Cluster (Async, may take 20-40 min)"
+      ansible.builtin.shell: |
         az aks create \
           -g {{ resource_group }} \
           -n {{ aks_name }} \
           --enable-private-cluster \
-          --vnet-subnet-id $(az network vnet subnet show \
-            -g {{ resource_group }} --vnet-name {{ vnet_name }} -n {{ node_subnet }} --query id -o tsv) \
-          --apiserver-subnet-id $(az network vnet subnet show \
-            -g {{ resource_group }} --vnet-name {{ vnet_name }} -n {{ api_subnet }} --query id -o tsv) \
-          --private-dns-zone $(az network private-dns zone create \
-            -g {{ resource_group }} -n {{ dns_zone }} --query id -o tsv) \
+          --apiserver-subnet-id $(az network vnet subnet show -g {{ resource_group }} --vnet-name {{ vnet_name }} -n {{ api_subnet }} --query id -o tsv) \
+          --vnet-subnet-id $(az network vnet subnet show -g {{ resource_group }} --vnet-name {{ vnet_name }} -n {{ node_subnet }} --query id -o tsv) \
+          --private-dns-zone $(az network private-dns zone show -g {{ resource_group }} -n {{ dns_zone }} --query id -o tsv) \
           --network-plugin azure
+      async: 3600
+      poll: 30
+      register: aks_result
+
+    - name: Show AKS creation output
+      ansible.builtin.debug:
+        var: aks_result.stdout_lines
